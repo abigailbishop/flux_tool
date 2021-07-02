@@ -83,8 +83,8 @@ def flux_sensitivity(energies, effective_area, livetime=units.yr, limit_factor=2
 
     return factors / np.asarray(effective_area)
 
-
-def neutrino_count(model, energies, effective_area, livetime=units.yr, model_band=False):
+def neutrino_count(model, energies, effective_area, livetime=units.yr, model_band=False,
+                   debug=False):
     """
     Count the number of neutrinos observed for a given model at each energy.
 
@@ -117,24 +117,35 @@ def neutrino_count(model, energies, effective_area, livetime=units.yr, model_ban
     step = np.diff(log_energy)[0]
 
     if model_band:
-        flux_min = lambda e: np.interp(e, model.energies, model.band_min)
-        flux_max = lambda e: np.interp(e, model.energies, model.band_max)
+        # Each lambda function takes log(energy) and outputs log(flux)
+        log_flux_min = lambda e: np.interp(
+            e, np.log10(model.energies), np.log10(model.band_min)  )
+        log_flux_max = lambda e: np.interp(
+            e, np.log10(model.energies), np.log10(model.band_max)  )
         mean_fluxes = np.zeros((len(energies), 2))
     else:
-        flux = lambda e: np.interp(e, model.energies, model.fluxes)
+        log_flux = lambda e: np.interp(
+            e, np.log10(model.energies), np.log10(model.fluxes),   )
         mean_fluxes = np.zeros(len(energies))
 
     for i, log_e in enumerate(log_energy):
         e_range = np.logspace(log_e-step/2, log_e+step/2, 101)
         log_e_range = np.linspace(log_e-step/2, log_e+step/2, 101)
         if model_band:
-            mean_fluxes[i, 0] = np.trapz(flux_min(e_range), x=log_e_range) / step
-            mean_fluxes[i, 1] = np.trapz(flux_max(e_range), x=log_e_range) / step
+            mean_fluxes[i, 0] = 10**(
+                np.trapz(log_flux_min(log_e_range), x=log_e_range) / step  )
+            mean_fluxes[i, 1] = 10**(
+                np.trapz(log_flux_max(log_e_range), x=log_e_range) / step  )
         else:
-            mean_fluxes[i] = np.trapz(flux(e_range), x=log_e_range) / step
+            mean_fluxes[i] = 10**(
+                np.trapz(    log_flux(log_e_range), x=log_e_range) / step  )
 
     sensitivities = flux_sensitivity(energies, effective_area,
                                      livetime=livetime, limit_factor=1)
+    
+    if debug:
+        print("\t\tMean Fluxes:", mean_fluxes)
+        print("\t\tSensitivities", sensitivities)
 
     # Transposes are used to make sure the operation works for the band values
     # as well as simple flux values
